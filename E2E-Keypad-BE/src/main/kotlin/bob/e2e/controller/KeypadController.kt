@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1")
 class KeypadController(private val keypadService: KeypadService) {
 
-    @GetMapping("/get_encrypted_keypad")
+    @GetMapping("/get_keypad")
     fun getEncryptedKeypad(): ResponseEntity<Map<String, Any>> {
         val response = keypadService.getEncryptedKeypad()
         return ResponseEntity.ok(response)

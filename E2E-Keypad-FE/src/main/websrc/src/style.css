@@ -1,0 +1,78 @@
+.keyboard_wrap{
+    position: fixed;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    left: 0;
+    bottom: 0;
+}
+
+.keyboard {
+    table-layout: fixed;
+    background-color: #76bbfc;
+    bottom:0;
+    border:0;
+    width:100vw;
+}
+
+.keyboard button {
+    
+    width: 100%;
+    border-radius: 0;
+    position: relative;
+    height: 62px;
+    margin: 0;
+    padding: 5px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    background: #54b4f0;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+}
+
+
+.keyboard span {
+    background-repeat: no-repeat;
+    position: absolute;
+    height: 50px;
+    width: 50px;
+    margin-left: -25px;
+    top: 5px;
+}
+
+.keyboard svg {
+    background-repeat: no-repeat;
+    position: absolute;
+    height: 40px;
+    width: 40px;
+    margin-left: -25px;
+    top: 10px;
+}
+
+.delete_all {
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffffffb8;
+}
+
+.user-input {
+    display: flex;
+    justify-content: center;
+    margin-top: 40%;
+}
+
+.circle {
+    width: 30px;
+    height: 30px;
+    margin: 0 5px;
+    border-radius: 50%;
+    background-color: #a8dcfc;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.circle.filled {
+    background-color: rgb(80, 172, 182);
+}
