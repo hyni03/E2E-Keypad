@@ -1,74 +1,104 @@
 package org.example.bob.e2e.service
 
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.ResourceLoader
 import org.springframework.stereotype.Service
 import java.security.MessageDigest
 import java.util.*
-
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import java.awt.Graphics2D
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
-import java.awt.Color
+import org.springframework.http.ResponseEntity
+import org.springframework.web.client.RestTemplate
 
 @Service
 class KeypadService(private val resourceLoader: ResourceLoader) {
 
-    private val keyMap = mutableMapOf<String, String>() // 로컬에 키와 UUID를 저장
+    @Value("\${secret.key}")
+    private lateinit var secretKey: String
 
-    // 암호화된 키패드와 이미지를 반환하는 메서드
+    private val keyMapStore = mutableMapOf<String, KeypadData>()
+    private val restTemplate = RestTemplate()
+    private val keyMapExpirationMillis: Long = 1 * 60 * 1000
+
+    data class KeypadData(val keyMap: Map<String, String>, val timestamp: Long)
+
     fun getEncryptedKeypad(): Map<String, Any> {
         val shuffledKeys = generateRandomKeys()
+        val keypadId = generateKeypadId()
+        val timestamp = System.currentTimeMillis()
+        val hash = generateHash(keypadId, timestamp)
+
+        keyMapStore[keypadId] = KeypadData(shuffledKeys, timestamp)
 
         return mapOf(
-            "keys" to shuffledKeys,
-            "images" to generateKeypadImages(keyMap.keys.toList())
+            "keys" to shuffledKeys.values.toList(),
+            "images" to generateKeypadImages(shuffledKeys.keys.toList()),
+            "keypadId" to keypadId,
+            "timestamp" to timestamp,
+            "hash" to hash
         )
     }
 
-    private fun generateConcatenatedBase64Images(keys: List<String>): String {
-        val imageList = mutableListOf<BufferedImage>()
+    private fun generateKeypadId(): String {
+        return UUID.randomUUID().toString()
+    }
 
-        // 키에 맞는 이미지를 로드하여 리스트에 추가
-        keys.forEachIndexed { _, key ->
-            val imagePath = if (key != " " && key != "  ") {
-                "classpath:static/images/_${key}.png"
-            } else {
-                "classpath:static/images/_blank.png"
+    private fun generateHash(keypadId: String, timestamp: Long): String {
+        val data = "$keypadId$timestamp"
+        val secretKeySpec = SecretKeySpec(Base64.getDecoder().decode(secretKey), "HmacSHA256")
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(secretKeySpec)
+        val hashBytes = mac.doFinal(data.toByteArray())
+        return Base64.getEncoder().encodeToString(hashBytes)
+    }
+
+    fun verifyHash(keypadId: String, timestamp: Long, receivedHash: String): Boolean {
+        return try {
+
+            val generatedHash = generateHash(keypadId, timestamp)
+            val isHashValid = generatedHash == receivedHash
+
+            if (!isHashValid) {
+                println("Hash validation failed. Expected: $generatedHash, Received: $receivedHash")
             }
-            val imgResource = resourceLoader.getResource(imagePath)
-            val img = ImageIO.read(imgResource.inputStream)
-            imageList.add(img)
+            isHashValid
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    fun sendToEndpoint(userInput: String, keypadId: String): ResponseEntity<String> {
+        val keypadData = keyMapStore[keypadId] ?: return ResponseEntity.status(400).body("Invalid keypadId")
+
+        // 유효시간이 지났는지 확인
+        if (System.currentTimeMillis() - keypadData.timestamp > keyMapExpirationMillis) {
+            keyMapStore.remove(keypadId)
+            return ResponseEntity.status(400).body("Keypad ID has expired.")
         }
 
-        val imgWidth = imageList[0].width
-        val imgHeight = imageList[0].height
-        val combinedWidth = imgWidth * imageList.size
-        val combinedHeight = imgHeight
+        val payload = mapOf(
+            "userInput" to userInput,
+            "keyHashMap" to keypadData.keyMap
+        )
 
-        // 결합된 이미지를 생성
-        val combinedImage = BufferedImage(combinedWidth, combinedHeight, BufferedImage.TYPE_INT_ARGB)
-        val g: Graphics2D = combinedImage.createGraphics()
+        val endpointUrl = "http://146.56.119.112:8081/auth"
+        val response = restTemplate.postForObject(endpointUrl, payload, String::class.java)
 
-        var x = 0
-        for (img in imageList) {
-            g.drawImage(img, x, 0, null)
-            x += imgWidth
+        return if (response != null && response.startsWith("SUCCESS")) {
+            keyMapStore.remove(keypadId)
+            ResponseEntity.ok(response)
+        } else {
+            ResponseEntity.status(400).body(response)
         }
-        g.dispose()
-
-        // 결합된 이미지를 Base64로 인코딩하여 반환
-        val baos = java.io.ByteArrayOutputStream()
-        ImageIO.write(combinedImage, "png", baos)
-        val imageBytes = baos.toByteArray()
-        baos.close()
-
-        return Base64.getEncoder().encodeToString(imageBytes)
     }
 
     private fun generateKeypadImages(keys: List<String>): String {
         val imageList = mutableListOf<BufferedImage>()
 
-        // 키에 맞는 이미지를 로드하여 리스트에 추가
         keys.forEachIndexed { index, key ->
             val imagePath = if (key != " " && key != "  ") {
                 "classpath:static/images/_${key}.png"
@@ -87,7 +117,6 @@ class KeypadService(private val resourceLoader: ResourceLoader) {
         val combinedWidth = imgWidth * gridWidth
         val combinedHeight = imgHeight * gridHeight
 
-        // 배경색을 지정하여 결합된 이미지를 생성
         val combinedImage = BufferedImage(combinedWidth, combinedHeight, BufferedImage.TYPE_INT_ARGB)
         val g: Graphics2D = combinedImage.createGraphics()
 
@@ -103,7 +132,6 @@ class KeypadService(private val resourceLoader: ResourceLoader) {
         }
         g.dispose()
 
-        // 결합된 이미지를 Base64로 인코딩하여 반환
         val baos = java.io.ByteArrayOutputStream()
         ImageIO.write(combinedImage, "png", baos)
         val imageBytes = baos.toByteArray()
@@ -113,25 +141,23 @@ class KeypadService(private val resourceLoader: ResourceLoader) {
     }
 
 
-    private fun generateRandomKeys(): List<String> {
+    private fun generateRandomKeys(): Map<String, String> {
         val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0", " ", "  ")
         val shuffledKeys = keys.shuffled()
         val md = MessageDigest.getInstance("SHA-256")
 
-        keyMap.clear()
+        val keyMap = mutableMapOf<String, String>()
         shuffledKeys.forEach { key ->
             keyMap[key] = if (key != " " && key != "  ") {
-                // 각 키에 대해 랜덤한 해시 값 생성
                 val randomBytes = ByteArray(16)
                 Random().nextBytes(randomBytes)
                 val hash = md.digest(randomBytes).joinToString("") { "%02x".format(it) }
-                hash
+                hash.take(32)
             } else {
                 key
             }
         }
 
-        return keyMap.values.toList() // 해시 리스트만 반환
+        return keyMap
     }
-
 }

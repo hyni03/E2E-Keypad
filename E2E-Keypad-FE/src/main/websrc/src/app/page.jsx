@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import useHook from "@/hooks/useHook";
-import Keypad from "@/components/Keyapd.jsx";
+import Keypad from "@/components/Keypad.jsx";
 import UserInput from '@/components/Userinput';
 
 export default function Page() {
@@ -35,7 +35,14 @@ export default function Page() {
     <div className="App">
       <h1>Custom Keypad</h1>
       <UserInput result={inputResult} />
-      <Keypad hash={states.hash} images={states.keypadimage} onButtonPressed={handleButtonPress} />
+      <Keypad 
+        keymap={states.keymap}
+        images={states.keypadimage} 
+        keypadId={states.keypadId}
+        timestamp={states.timestamp}
+        hash={states.hash} 
+        onButtonPressed={handleButtonPress} 
+      />
     </div>
   );
 }
